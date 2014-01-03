@@ -1,5 +1,5 @@
 \documentclass[letterpaper]{article} 
-\usepackage{fancyhdr}
+\usepackage{fancyhdr, cite}
 \pagestyle{fancy}
 \rhead{\small Research Statement. Aurojit Panda}
 \lhead{}
@@ -32,7 +32,7 @@ correctness of forwarding tables (i.e., ensuring that the network is loop free, 
 not account for dynamic data path behavior exhibited by many middleboxes and hence provides an incomplete
 analysis for many networks.
 
-My recent research has focused on the intersection of both these trends. I have been looking at applying
+My current recent research has focused on the intersection of both these trends. I have been looking at applying
 techniques from the Programming Languages literature to verify administrator provided invariants (for instance
 isolation, ensuring traversal, etc.) for networks with dynamic elements like middleboxes. Some of my other
 research has separately focused on the architecture and design of primitives that application developers can
@@ -65,24 +65,148 @@ boxes are widely used in carrier networks, for tasks such as caching, deep-packe
 customer isolation, etc. Packets in these networks commonly pass through several dynamic elements and overall
 network behavior depends on the result of processing on all of these elements. Furthermore, these elements do
 not act in isolation: a WAN optimizer can adversely affect the behavior of an application level firewall, even
-in the absence of configuration errors.
+in the absence of configuration errors. Given this observation networks with middleboxes have at least three
+additional sources of potential errors: middleboxes could be misconfigured, the network policy which decides
+the order in which middleboxes are traversed might violate network invariants or a particular collection of
+middleboxes might be unable to enforce a given invariant.
 
-Concurrently there is a lot of interest in the formal verification of software resulting in tools
-like KLEE~\cite{cadar2008klee}, etc. and in efforts to verify large systems software~\cite{klein2009sel4}.
-Recent work~\cite{dobrescu2014software} has shown how to take advantage of these techniques to verify the
-correctness of a single software dataplane element, for instance a middlebox. Many of these works have relied
-on model checking, an approach to formal verification where one generates a mathematical model for the
-program, i.e., the set of states the program can be in and transitions between those states. Given this model
-one can prove or disprove correctness by systematically exploring all possible states and checking if a
-disallowed state is ever reached. Model checking has been well studied in the programming language
-literature~\cite{jhala2009software, han2007providing} since it requires little or no changes to the underlying
-program and places no limitations on the programs behavior. Model checking however generally does not scale to
-large systems, performance degrades rapidly with an increase in the size of the state space. 
+Recent work~\cite{dobrescu2014software} has shown how one can use formal verification techniques to check the
+correctness of a single software dataplane element, for instance a middlebox. This work relies on model
+checking, an approach to formal verification where one generates a mathematical model for the program, i.e.,
+the set of states the program can be in and transitions between those states. Given this model one can prove
+or disprove correctness by systematically exploring all possible states and checking if a disallowed state is
+ever reached. Model checking has been well studied in the programming language
+literature~\cite{jhala2009software, han2007providing} and has been used to show correctness for a variety of
+programs~\cite{cadar2008klee, klein2009sel4}.  Model checking however scales poorly with increase in state
+space and the verification problem is intractable for general programs. As a result much of the work in this
+area focuses on applying model checking to specific domains where the state space can be more efficiently
+explored. 
 
-My research focuses on techniques that would allow HSA and Veriflow style verification of network wide
-behavior for networks with complex data path elements such as middleboxes. Using model checking to do this is
-appealing since it requires no assumptions about the semantics of data path elements. However directly
-combining models generated from middlebox code is not scalable.  
+My research focuses on extending model checking so that network wide properties can be verified even in the
+presence of complex data path elements like middleboxes. Model checking is appealing in this case since it
+places no constraints on middlebox semantics. 
+
+At a high level our approach is to treat each middlebox as a subroutine and the network as one large program
+composed of many of these subroutines. End hosts in this model are treated as subroutines which can send or
+receive packets.  Network policy (for specified using mechanisms like SIMPLE~\cite{qazi2013simple}) specifies
+the order in which each subroutine is called for a specific type of packet. Network invariants are then
+specified as requirements that either some packets always trigger certain subroutines, some packets never
+reach certain end hosts (i.e., a subroutine is never called with inputs of a certain kind), etc. Amongst other
+things this approach allows a wide variety of invariants to be checked, allows for the decomposition of
+network policy and middlebox configurations and allows each middlebox model to be written independently.
+However it also presents a scalability challenge.
+
+A naive implementation of our high level approach might depend on fully specified models for middleboxes, for
+instance models generated by a tool like Klee~\cite{cadar2008klee}. Some middleboxes, for instance WAN
+optimizers or application firewalls, can have complicated logic and result in models with a very large number
+of variables and a large state space. Furthermore as several of these models are combined the state space
+allowed by the model grows exponentially making verification intractable. Using fully specified models would
+therefore render model checking intractable even for reasonably small networks.
+
+We observe however that global properties do not require fully specified models. For instance while other
+network elements might be affected by the observation that a WAN optimizer changes the packet payload they are
+ambivalent to the precise transformation applied (except perhaps to track things like a pair of functions
+where one compresses and the other expands are inverses of each other). This observation implies that one need
+not model the precise mechanism by which complex transformations (for instance compression, encryption,
+computing a hash, etc.) are carried out, or even the mechanisms by which complex decisions (behavioral
+analysis marking a flow as potentially harmful) are made and can instead abstractly model what gets
+transformed and possible decisions. Abstracting behavior away in this manner significantly reduces the state
+space that needs to be explored (for instance a DPI box can now mark a packet as either benign or harmful and
+this is the only state we see for this process rather than observing the precise transitions that led to this
+decision). Such reduction also makes analysis tractable in the presence of several complex network elements.
+
+Unfortunately the previous optimization is not sufficient for all networks. In particular large networks can
+have several thousands or tens of thousands of middleboxes and even with abstract models the state space for the
+entire network grows exponentially making the problem intractable. While a network might have thousands of
+middleboxes, any class of packets only traverses a few of them. More importantly all packets between a
+particular source destination pair only go through a few of the middleboxes in a network. 
+
+If we could focus analysis on only the few middleboxes in a path and verify properties based on those the
+worse case analysis would only require going through the states for all the middleboxes in the longest path
+between a source destination pair, dramatically reducing complexity. Unfortunately such separation requires
+that the properties for a path be independent of all other (possibly intersecting) paths through the network.
+This is often not true: for instance the contents cached in a web proxy are affected by all end hosts whose
+requests are served by the proxy. Therefore to verify an invariant that say host A can never get content from
+server S we might need to verify not only the path between A and S (which goes through a web proxy W) but also
+the path from all other hosts which can reach W to server S. Path independence can be restored in a number of
+different ways in this case: a) placing a firewall between A and W configured to disallow requests from A to S
+(and thus prevent these requests from being served from the proxy), b) disallowing the proxy from caching any
+state from S or c) partitioning the cache so that A's cache is separate from everyone elses. 
+
+Path independence obviously makes the problem of model checking networks more tractable but is also appealing
+from an administrative standpoint: since intersecting paths do not affect each other, network administrators
+must only consider the paths that actually pass through a middlebox when changing middlebox configuration.
+Similar when adding or removing middleboxes the only thing affected are paths on which the middleboxes appear.
+Determining the exact criterion for path independence, cases in which it makes sense and generalizing these
+results is the focus of my current research. Furthermore even if we cannot achieve complete path independence,
+even splitting the network into independent areas also reduces the state space and might be sufficient in many
+cases. 
+
+\section*{Extended Virtualization}
+Along with verifying networks which contain middleboxes and other complex network elements, other research I
+am involved in investigates how application writers and the users of networks can take advantage of these
+functions. 
+
+Existing application for instance file hosting services (such as Dropbox), P2P application (such as
+BitTorrent) and others rely on a notion of network distance, trying to minimize latency for network
+transfers. Similarly CDNs and other content delivery services often rely on DNS or other mechanisms to direct
+traffic to the nearest source for content, and VoIP providers might use servers to proxy traffic for clients
+behind NATs who are unable to directly accept connections. All of these applications can be better served by
+providing network primitives to accomplish these tasks: network providers know the topology of the network
+connecting their customers and are in a better position provide a distance metric for applications requiring
+low latency data transfer, they are often in a better position to direct traffic to caches and finally they
+can instantiate proxies which are closer to the source or destination for VoIP traffic thus decreasing
+latency.
+
+The idea that the network can provide additional information to improve application performance has been
+previous proposed (for instance by the ALTO project~\cite{seedorf2009traffic}). Previous proposals however
+suffered from two major drawbacks: 1) they were only applicable to certain applications and certain
+protocols, 2) they required that network administrators place new hardware within the network. We argue that
+the second limitation is now gone: as a result of NFV and processing requirement, large ISP networks have
+commodity server hardware deployed within the network. Furthermore ISPs and network providers want to offer
+additional services as a means to get new revenue and differentiate themselves from the competition.
+
+Our research in this area looks into a common set of reusable primitives that can be implemented (by network
+operators) and used by a wide range of application writers (referred to as tenants henceforth). By focusing
+on reusable primitives we make sure that we are not tied to particular services or protocols and in fact are
+usable in a wide range of settings. We call this extended virtualization since we envision that the network
+operator instantiates a virtual copy of these primitives for each tenant who makes use of these services.
+
+The current set of primitives that we support include: i) local discovery: a DNS like service that provides a
+set of local (i.e. nearby) peers, ii) global discovery: a DNS like per application service that provides
+tenants with the ability to rapidly change the information served by the service, iii) name service
+demultiplexing: allows for the coexistance of different naming schemes (for instance ICN like content naming
+schemes and DNS like names) and sends requests to different naming services based on the type of query, etc.
+and others.
+
+Application writers can logically compose these services to provide end user services. As an example consider
+an application like Dropbox. At present the Dropbox client is responsible for using DNS to discover the
+origin server on which data is stored, and uses flooding or other mechanisms to discover other clients connected to
+the same local area network. The client then uses this information to decide on the most efficient way to
+synchronize the file system (by sending data only to the origin server, by sending data to both the origin
+server and any local machines or using some other strategy). In a network supporting extended virtualization,
+Dropbox could instead ask the network provider to instantiate a local and global discovery service. In this
+new model Dropbox can rely on the global and local discovery services for the location of the origin server and
+all nearby (as defined by the local discovery service) peers belonging to the same user, and use this
+information to optimize file synchronization.
+
+Discovering the minimal set of primitives is still an open question for this research, our current efforts
+have focused on building primitives to support a small set of representative applications. As the number of
+general purpose cores deployed in carrier networks increases a move towards using the network as a platform
+seems inevitable.
+
+The two research project described are synergistic since moving to a model where the network is a platform
+creates a scenario where new network functionality is rapidly configured and deployed in the network. As the
+pace at which new functionality is deployed increases the chance of bugs or configuration errors increases as
+does the complexity of manually verifying new networking functionality. Verification therefore is an important
+requirement for the network to evolve into a platform: network operators need tools to guarantee correctness
+even as they allow a wider set of tenants to affect the internals of a network.
+
+At the same time verification is interesting largely because of the pace at which networks are evolving and
+because of the complexity of some of the tools deployed. As network complexity increases it is inevitable that
+we will need formal verification techniques to prove correctness for these large distributed systems. 
+
+
 \bibliographystyle{abbrv}
 \bibliography{bibs}
 \end{document}
