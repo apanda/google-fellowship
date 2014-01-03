@@ -11,23 +11,27 @@
 \date{}
 \thispagestyle{empty}
 \maketitle
-Networks provide higher level services and functionality beyond packet forwarding. These services
-are often provided by middleboxes which are commonly built using commodity server hardware, with
-processing carried out in software. This use of a common hardware platform allows network
-providers to rapidly deploy newer services; Network Function Virtualization (NFV) allows operators to deploy
-new network functionality using the same tools used to rapidly provision and deploy new web services.
-This shift means network operators can allow customers (other companies) to deploy
-services on their network. Recent trends like ISP provided CDNs, the large computation power available in IXP
-datacenters, etc. seem to point to a trend where carrier networks become available as a platform.
+Networks provide higher level services and functionality beyond packet forwarding. Such services are used for
+a variety of reasons including as a means to support protocols (for instance session border controllers for
+VoIP sessions), to improve network performance (for instance WAN optimizers), shape traffic based on
+application, provide isolation among tenants, provide caches (both in the guise of CDNs and as web caches for
+wireless service). These services have traditionally been implemented in middleboxes, which in turn are built
+using commodity server hardware running specialized software. This use of a common hardware platform allows
+network providers to rapidly deploy newer services. Network Function Virtualization (NFV) has recently emerged
+as an industry standard and allows operators to deploy new service instances easily (often using the same
+tools web services use to elastically deploy new services).  This shift means network operators can allow
+customers (other companies) to deploy services on their network.  Recent trends like ISP provided CDNs, the
+large computation power available in IXP datacenters, etc. seem to point to a trend where carrier networks
+become available as a platform.
 
 At the same time networks continue to be critical infrastructure and network operators must ensure the
 correctness of their networks. Traditionally the network data plane and control plane were tightly coupled and
-network infrastructure evolved slowly, allowing network operators time to exhaustively test software and
+network infrastructure evolved relatively slowly, allowing network operators to exhaustively test software and
 hardware before deploying it on their network. More recently Software Defined Networking (SDN) has
 allowed the network control plane to evolve independently of the data plane. This in conjunction with the
 trend towards NFV has increased the need for quick, automatic verification of network behavior. Recent
 work~\cite{khurshid13veriflow, kazemian2012header} has looked at verifying the correctness of forwarding
-tables (i.e., ensuring that the network is loop free, etc.). This work however does not account for dynamic
+tables (e.g., ensuring that the network is loop free, etc.). This work however does not account for dynamic
 data path behavior exhibited by many middleboxes and hence provides an incomplete analysis for many networks.
 
 My recent research has focused on the intersection of both these trends. I have been looking at applying
@@ -129,7 +133,8 @@ server S we might need to verify not only the path between A and S (which goes t
 the path from all other hosts which can reach W to server S. Path independence can be restored in a number of
 different ways in this case: a) placing a firewall between A and W configured to disallow requests from A to S
 (and thus prevent these requests from being served from the proxy), b) disallowing the proxy from caching any
-state from S or c) partitioning the cache so that A's cache is separate from everyone elses. 
+state from S or c) partitioning the cache so that A's cache is separate from other hosts (or more specifically
+hosts with different policies). 
 
 Path independence obviously makes the problem of model checking networks more tractable but is also appealing
 from an administrative standpoint: since intersecting paths do not affect each other, network administrators
@@ -173,7 +178,7 @@ operator instantiates a virtual copy of these primitives for each tenant who mak
 The current set of primitives that we support include: i) local discovery: a DNS like service that provides a
 set of local (i.e. nearby) peers, ii) global discovery: a DNS like per application service that provides
 tenants with the ability to rapidly change the information served by the service, iii) name service
-demultiplexing: allows for the coexistance of different naming schemes (for instance ICN like content naming
+demultiplexing: allows for the coexistence of different naming schemes (for instance ICN like content naming
 schemes and DNS like names) and sends requests to different naming services based on the type of query, etc.
 and others.
 
