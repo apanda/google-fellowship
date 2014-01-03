@@ -11,28 +11,26 @@
 \date{}
 \thispagestyle{empty}
 \maketitle
-Networks increasingly provide higher level services and functionality beyond packet forwarding. These services
-are often provided by middleboxes which are increasingly built using commodity server hardware, with
-processing carried out in software. This move to a common hardware platform has in turn allowed network
-providers to rapidly deploy newer services; Network Function Virtualization (NFV) makes it so one can deploy
-new network functionality using similar tools to those used to provision and deploy new web services.
-Simplifying and hastening the rate at which network services can be deployed and an increasing reliance on
-commodity servers means that network operators can now allow service providers and customers to deploy
-services on the network. Recent trends like ISP provided CDNs, the large computation power available in IXP
+Networks provide higher level services and functionality beyond packet forwarding. These services
+are often provided by middleboxes which are commonly built using commodity server hardware, with
+processing carried out in software. This use of a common hardware platform allows network
+providers to rapidly deploy newer services; Network Function Virtualization (NFV) allows operators to deploy
+new network functionality using the same tools used to rapidly provision and deploy new web services.
+This shift means network operators can allow customers (other companies) to deploy
+services on their network. Recent trends like ISP provided CDNs, the large computation power available in IXP
 datacenters, etc. seem to point to a trend where carrier networks become available as a platform.
 
-At the same time networks continue to be a critical infrastructure and network operators must ensure that new
-services and policies do not violate the correctness of their networks. Traditionally the network data plane
-and control plane were tightly couples and network infrastructure evolved slowly, allowing network operators
-time to exhaustively test software and hardware before deploying it on their network. More recently however
-Software Defined Networking (SDN) has meant that the network control plane can evolve independent of the data
-plane. This in conjunction with the trend towards NFV has increased the need for quick, automatic verification
-of network behavior. Recent work~\cite{khurshid13veriflow, kazemian2012header} has looked at verifying the
-correctness of forwarding tables (i.e., ensuring that the network is loop free, etc.). This work however does
-not account for dynamic data path behavior exhibited by many middleboxes and hence provides an incomplete
-analysis for many networks.
+At the same time networks continue to be critical infrastructure and network operators must ensure the
+correctness of their networks. Traditionally the network data plane and control plane were tightly coupled and
+network infrastructure evolved slowly, allowing network operators time to exhaustively test software and
+hardware before deploying it on their network. More recently Software Defined Networking (SDN) has
+allowed the network control plane to evolve independently of the data plane. This in conjunction with the
+trend towards NFV has increased the need for quick, automatic verification of network behavior. Recent
+work~\cite{khurshid13veriflow, kazemian2012header} has looked at verifying the correctness of forwarding
+tables (i.e., ensuring that the network is loop free, etc.). This work however does not account for dynamic
+data path behavior exhibited by many middleboxes and hence provides an incomplete analysis for many networks.
 
-My current recent research has focused on the intersection of both these trends. I have been looking at applying
+My recent research has focused on the intersection of both these trends. I have been looking at applying
 techniques from the Programming Languages literature to verify administrator provided invariants (for instance
 isolation, ensuring traversal, etc.) for networks with dynamic elements like middleboxes. Some of my other
 research has separately focused on the architecture and design of primitives that application developers can
@@ -70,8 +68,8 @@ additional sources of potential errors: middleboxes could be misconfigured, the 
 the order in which middleboxes are traversed might violate network invariants or a particular collection of
 middleboxes might be unable to enforce a given invariant.
 
-Recent work~\cite{dobrescu2014software} has shown how one can use formal verification techniques to check the
-correctness of a single software dataplane element, for instance a middlebox. This work relies on model
+Concurrently other work~\cite{dobrescu2014software} has proposed using formal verification techniques to
+verify correctness of a single software dataplane element, for instance a middlebox. This work relies on model
 checking, an approach to formal verification where one generates a mathematical model for the program, i.e.,
 the set of states the program can be in and transitions between those states. Given this model one can prove
 or disprove correctness by systematically exploring all possible states and checking if a disallowed state is
