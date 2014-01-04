@@ -1,9 +1,25 @@
 \documentclass[letterpaper]{article} 
-\usepackage{fancyhdr, cite}
+\usepackage{fancyhdr, cite, hyperref, lastpage}
 \pagestyle{fancy}
-\rhead{\small Research Statement. Aurojit Panda}
-\lhead{}
+\setlength{\oddsidemargin}{12pt}
+\setlength{\evensidemargin}{10pt}
+\setlength{\marginparwidth}{0in}
+\setlength{\textwidth}{438pt}
+\fancyhead{}
+\fancyfoot{}
+\fancyheadoffset[R]{1pt}
+\fancyfootoffset[R]{1pt}
+\fancyhead[R]{\small Research Statement. Aurojit Panda}
+\fancyfoot[R]{\thepage/\pageref{LastPage}}
 \renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{%
+    \fancyhf{}
+    \fancyfoot[R]{\thepage/\pageref{LastPage}}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+    \fancyfootoffset[R]{1pt}
+}
+
 \newcommand\eat[1]{}
 \begin{document}
 \title{\Large Research Statement}
@@ -11,169 +27,170 @@
 \date{}
 \thispagestyle{empty}
 \maketitle
-Networks provide higher level services and functionality beyond packet forwarding. Such services are used for
-a variety of reasons including as a means to support protocols (for instance session border controllers for
-VoIP sessions), to improve network performance (for instance WAN optimizers), shape traffic based on
-application, provide isolation among tenants, provide caches (both in the guise of CDNs and as web caches for
-wireless service). These services have traditionally been implemented in middleboxes, which in turn are built
-using commodity server hardware running specialized software. This use of a common hardware platform allows
-network providers to rapidly deploy newer services. Network Function Virtualization (NFV) has recently emerged
-as an industry standard and allows operators to deploy new service instances easily (often using the same
-tools web services use to elastically deploy new services).  This shift means network operators can allow
-customers (other companies) to deploy services on their network.  Recent trends like ISP provided CDNs, the
-large computation power available in IXP datacenters, etc. seem to point to a trend where carrier networks
-become available as a platform.
+Originally networks were responsible for best-effort packet delivery between hosts. These networks
+were designed to be resilient (i.e., they were designed to recover from failures such as link and switch failures) but
+availability was not a requirement. This meant that in practice networks could take tens or hundreds of milliseconds (if
+not longer) to recover, while the control plane computed and converged on a new set of forwarding rules. During control
+plane convergence the network was also required to tolerate loops, blackholes and other misconfigurations. These
+conditions are no longer true for modern networks.
 
-At the same time networks continue to be critical infrastructure and network operators must ensure the
-correctness of their networks. Traditionally the network data plane and control plane were tightly coupled and
-network infrastructure evolved relatively slowly, allowing network operators to exhaustively test software and
-hardware before deploying it on their network. More recently Software Defined Networking (SDN) has
-allowed the network control plane to evolve independently of the data plane. This in conjunction with the
-trend towards NFV has increased the need for quick, automatic verification of network behavior. Recent
-work~\cite{khurshid13veriflow, kazemian2012header} has looked at verifying the correctness of forwarding
-tables (e.g., ensuring that the network is loop free, etc.). This work however does not account for dynamic
-data path behavior exhibited by many middleboxes and hence provides an incomplete analysis for many networks.
+Modern networks are required to provide a broader set of functions. Some of these functions are provided by middleboxes and are
+used by the network operator to improve network performance and reliability. For instance ISPs use a combination of web
+proxies (for caching static content), traffic shapers and WAN optimizers to increase perceived end user performance for
+networks. They also make use of a variety of stateful and application specific firewalls to provide isolation between
+customers, restrict traffic according to legal requirements and to protect the network from denial of service or other
+attacks. The number and variety of deployed middleboxes~\cite{sherry2012making} has increased greatly over the past
+years as we have discovered both new opportunities for optimization and new threats against which networks must be
+protected.
 
-My recent research has focused on the intersection of both these trends. I have been looking at applying
-techniques from the Programming Languages literature to verify administrator provided invariants (for instance
-isolation, ensuring traversal, etc.) for networks with dynamic elements like middleboxes. Some of my other
-research has separately focused on the architecture and design of primitives that application developers can
-use to take advantage of network operator provided services. These primitives allow application developers to
-query the network for additional information and to effectively use services instantiated by the network
-operator.
+Other networks functionality is required to support networked applications. DHCP and DNS were some of the early examples
+of such services, providing mechanisms for automatic configuration and discovery of services. Since then the list of
+such services has grown and networks provide services for content delivery, IPTV services, VoIP services etc. These
+services become more important as the complexity of networked applications increases and networks are now increasingly
+turning into platforms for implement networked applications.
+
+Secondly, customers (both end user and content providers) expect networks to be highly available: in particular
+requiring little or no disruption during failures. Providing high availability means that networks can no longer wait
+for control plane convergence (at least not for tens or hundreds of milliseconds) to restore connectivity (i.e. ensure
+that there are paths from a source to a destination). Furthermore, any misconfiguration of middleboxes or switches can
+be catastrophic, requiring that customers wait not just for control plane convergence but for human intervention. Modern
+networks therefore need to protect against a wide variety of failure scenarios, including not just equipment failure but
+also misconfiguration.
+
+My research attempts to address these issues in three ways: (1) reducing the time taken for networks to restore
+connectivity, (2) providing tools and techniques for verifying correctness of networks with dynamic data path elements
+(such as middleboxes) and (3) building primitives for service level virtualization that can be used by application
+developers.
+
+\section*{Network Resilience}
+Traditionally in networking we make a distinction between the data plane and the control plane: the data plane forwards
+packets based on local state (e.g., the contents of a router's FIB), the control plane establishes this forwarding state
+through distributed algorithms or manual configuration. In a naive implementation of this two-plane approach, the
+network can recover from failure only after the control plan has computed a new set of paths and updated the state on
+all routers. However the disparity in timescales between data plane operations (where a packet can be forwarded in less
+than a microsecond) and control plane convergence (which can require several hundred milliseconds) mean that failures
+often lead to unacceptably long outages.
+
+To reduce the length of these outages, the control plane is often tasked with precomputing and installing an additional
+set of failover paths in the data plane. When a failure is detected the data plane utilizes these precomputed paths to
+forward packets. However, these failover techniques require careful configuration (for instance MPLS FRR requires that
+operators set up backup tunnels after accounting for the probability of correlated failures, etc.) and provide no
+guarantees on failover. Several recent failures~\cite{sprint2006, emea2008, wiki2012} have been attributed to link
+failures despite the use of failover paths. 
+
+This begs the question: can we automatically precompute a set of static paths that can provide connectivity in the
+presence of any set of failures (that do not physically partition the network). In~\cite{feigenbaum12resilience} we
+showed that finding a static configuration that could respond to any set of failures was impossible in general. Given
+this impossibility result it is clear that just precomputing failovers is not sufficient.
+
+Our algorithm, Data Driven Connectivity (DDC)~\cite{liu13ddc} uses simple changes in forwarding state predicated
+only on the destination address and the input port of a packet to ensure that forwarding choices always direct packets
+to their destination in the absence of physical partitions (packets might still be dropped due to congestion or
+corruption). The changes in forwarding state can be implement in ASICs, allowing networks using DDC to achieve perfect
+connectivity entirely in the data plane.
+
+DDC however does not provide any bounds on path length, nor does it account for congestion or guarantee in-order
+delivery. These issues are instead addressed by the control plane which can rely on global information and work at much
+slower timescales. The DDC paradigm therefore separates connectivity (i.e., correctness for the forwarding state) from
+routing (i.e. efficient forwarding) and shows that one can achieve the former with purely local information. 
+
+Separating connectivity from efficient routing also allows for richer more complex control plane algorithms: the data
+plane can now establish basic connectivity and the control plane can utilize this connectivity to exchange messages and
+run distributed algorithms that restore efficiency.
 
 \section*{Network Verification}
-SDN has enabled the modularization of network control planes providing software with a well defined API for
-affecting the data plane. Modularization has resulted in centralization which allows software to observe
-forwarding state across the network. Simultaneously the use of a common API allows software to reason about
-the semantics of the network data plane based upon this forwarding state. Recent work like Header Space
-Analysis (HSA)~\cite{kazemian2012header} and Veriflow~\cite{khurshid13veriflow} have used these properties to
-verify forwarding state and provide tools to reason about forwarding paths. 
+DDC provides resilience against switch and link failures in a network. Misconfiguration might however still result in
+the network behaving incorrectly: for instance a misconfigured firewall might not provide required isolation properties.
+Previous work like Header Space Analysis (HSA)~\cite{kazemian2012header} and Veriflow~\cite{khurshid13veriflow} have
+focused on verifying the correctness of forwarding configuration: i.e., they can be used to analyze forwarding behavior
+given control plane routing configuration.
 
-Both HSA and Veriflow can be used to verify the network transfer function, i.e., the paths traversed by
-packets given the set of forwarding tables installed in the data path. These techniques however have a few
-important limitations: 1. They assume that forwarding state is only modified by the control plane, i.e.,
-data plane behavior is only affected by control plane actions. This assumption is violated by several network
-elements; for instance, learning switches and stateful firewalls depend on previous data path traffic. 2.
-HSA can handle changes to the layer 3 (and layer 2) headers of a packet but does not account for modifications to the
-packet payload. Middleboxes are often application specific and can be affected by changes to the packet
-payload. 3. The specific techniques used are tractable in part because of the limited set of operations provided by
-router ASICs. In particular it is not tractable to extend a similar form of reasoning to general purpose
-packet processors of the kind used in middleboxes.
+These works take as input the set of routing tables (the RIB) in switches and infer the network transfer function, i.e.,
+the set of paths traversed by different classes of packets through the network. These techniques rely on a few
+assumptions to make this inference, in particular they assume: (1) forwarding behavior is only affected by the control
+plane, (2) forwarding behavior depends only on the packet header (as a result they do not model or track the packet
+payload) and (3) forwarding is performed by ASICs which support a limited set of operations. The last assumption in
+particular is important in making their approach tractable.
 
-Recent studies~\cite{sherry2012making} show that enterprise networks (including extremely large networks with
-over $100,000$ hosts) on average contain as many middleboxes as layer 3 routers. Similarly non-forwarding
-boxes are widely used in carrier networks, for tasks such as caching, deep-packet inspection, providing
-customer isolation, etc. Packets in these networks commonly pass through several dynamic elements and overall
-network behavior depends on the result of processing on all of these elements. Furthermore, these elements do
-not act in isolation: a WAN optimizer can adversely affect the behavior of an application level firewall, even
-in the absence of configuration errors. Given this observation networks with middleboxes have at least three
-additional sources of potential errors: middleboxes could be misconfigured, the network policy which decides
-the order in which middleboxes are traversed might violate network invariants or a particular collection of
-middleboxes might be unable to enforce a given invariant.
+Unfortunately middleboxes and other network elements violate all three of these assumptions: (1) the forwarding behavior
+of learning switches, stateful firewalls, etc. depends not only on their configuration but also on past traffic, (2)
+application specific firewalls and other middleboxes often operate at layer 4 or layer 7 and their behavior depends on
+the packet payload and (3) middleboxes are commonly built using general purpose CPUs and do not have the semantic
+limitations of ASIC. Middleboxes however are still prone to errors and misconfiguration and the overall behavior of the
+network is a function not just of the configuration of an individual middlebox but depends on the configuration of all
+middleboxes traversed. For instance the presence of a WAN optimizer might affect the configuration of an application
+specific firewall, especially if the WAN optimizer appears before the firewall etc. 
 
-Concurrently other work~\cite{dobrescu2014software} has proposed using formal verification techniques to
-verify correctness of a single software dataplane element, for instance a middlebox. This work relies on model
-checking, an approach to formal verification where one generates a mathematical model for the program, i.e.,
-the set of states the program can be in and transitions between those states. Given this model one can prove
-or disprove correctness by systematically exploring all possible states and checking if a disallowed state is
-ever reached. Model checking has been well studied in the programming language
-literature~\cite{jhala2009software, han2007providing} and has been used to show correctness for a variety of
-programs~\cite{cadar2008klee, klein2009sel4}.  Model checking however scales poorly with increase in state
-space and the verification problem is intractable for general programs. As a result much of the work in this
-area focuses on applying model checking to specific domains where the state space can be more efficiently
-explored. 
+My current research focuses on building tools and techniques for proving the correctness of networks containing
+middleboxes and other dynamic network element. Our approach builds on model checking which has been recently
+used~\cite{dobrescu2014software} to verify correctness of a individual middleboxes. Model
+checking~\cite{jhala2009software, han2007providing} is a commonly used formal verification technique where correctness
+is proved using a mathematical model for the program.  Naive model checking scales poorly with increase in a program's
+state space and much of the work on model checking focuses on reducing the state space that needs to be explored.
 
-My research focuses on extending model checking so that network wide properties can be verified even in the
-presence of complex data path elements like middleboxes. Model checking is appealing in this case since it
-places no constraints on middlebox semantics. 
+At a high level our approach is to treat each middlebox as a subroutine and the network as a large program composed of
+many of these subroutines. Network policy (specified using mechanisms like SIMPLE~\cite{qazi2013simple}) specifies
+the order in which each subroutine is called for a specific type of packet. Network invariants are then specified as
+requirements that either some packets always trigger certain subroutines, some packets never reach certain end hosts
+(i.e., a subroutine is never called with inputs of a certain kind), etc. Decomposing middleboxes and network policy in
+this manner allows middlebox models to be written (or generated) independently and reused for different networks.
 
-At a high level our approach is to treat each middlebox as a subroutine and the network as one large program
-composed of many of these subroutines. End hosts in this model are treated as subroutines which can send or
-receive packets.  Network policy (for specified using mechanisms like SIMPLE~\cite{qazi2013simple}) specifies
-the order in which each subroutine is called for a specific type of packet. Network invariants are then
-specified as requirements that either some packets always trigger certain subroutines, some packets never
-reach certain end hosts (i.e., a subroutine is never called with inputs of a certain kind), etc. Amongst other
-things this approach allows a wide variety of invariants to be checked, allows for the decomposition of
-network policy and middlebox configurations and allows each middlebox model to be written independently.
-However it also presents a scalability challenge.
+A naive implementation of our high level approach might depend on fully specified models for middleboxes, for instance
+models generated by a tool like Klee~\cite{cadar2008klee}. Middlebox code can however be complex both for packet
+processing (for instance WAN optimizers include code for the compression logic) and for providing administrative
+interfaces, etc. Further as models are combined, model complexity grows exponentially, and the use of fully specified
+models renders model checking intractable even for reasonably small networks.
 
-A naive implementation of our high level approach might depend on fully specified models for middleboxes, for
-instance models generated by a tool like Klee~\cite{cadar2008klee}. Some middleboxes, for instance WAN
-optimizers or application firewalls, can have complicated logic and result in models with a very large number
-of variables and a large state space. Furthermore as several of these models are combined the state space
-allowed by the model grows exponentially making verification intractable. Using fully specified models would
-therefore render model checking intractable even for reasonably small networks.
-
-We observe however that global properties do not require fully specified models. For instance while other
+However, global network properties do not require fully specified models. For instance while other
 network elements might be affected by the observation that a WAN optimizer changes the packet payload they are
 ambivalent to the precise transformation applied (except perhaps to track things like a pair of functions
-where one compresses and the other expands are inverses of each other). This observation implies that one need
-not model the precise mechanism by which complex transformations (for instance compression, encryption,
-computing a hash, etc.) are carried out, or even the mechanisms by which complex decisions (behavioral
-analysis marking a flow as potentially harmful) are made and can instead abstractly model what gets
-transformed and possible decisions. Abstracting behavior away in this manner significantly reduces the state
-space that needs to be explored (for instance a DPI box can now mark a packet as either benign or harmful and
-this is the only state we see for this process rather than observing the precise transitions that led to this
-decision). Such reduction also makes analysis tractable in the presence of several complex network elements.
+where one compresses and the other expands are inverses of each other). This  means that models do not need to precisely
+define mechanism by which packets are transformed or classified and can instead just abstractly specify what parts of a
+packet are transformed (a WAN optimizer changes the payload) or the possible results of a classification operation (an
+application firewall can mark a packet as either benign or harmful). Furthermore parts of the code not run in
+the data path can be entirely elided from the models. This abstraction significantly reduces model complexity making
+verification tractable for many networks.
 
-Unfortunately the previous optimization is not sufficient for all networks. In particular large networks can
-have several thousands or tens of thousands of middleboxes and even with abstract models the state space for the
-entire network grows exponentially making the problem intractable. While a network might have thousands of
-middleboxes, any class of packets only traverses a few of them. More importantly all packets between a
-particular source destination pair only go through a few of the middleboxes in a network. 
+Unfortunately the previous optimization is not sufficient for all networks. In particular large networks can have
+several thousands or tens of thousands of middleboxes and even with simplified models verification is intractable. Even
+in these large networks an individual packet (or a class of packets) only traverses a few middleboxes. Furthermore all
+packets between a particular source destination pair only go through a few of the middleboxes in a network. 
 
-If we could focus analysis on only the few middleboxes in a path and verify properties based on those the
-worse case analysis would only require going through the states for all the middleboxes in the longest path
-between a source destination pair, dramatically reducing complexity. Unfortunately such separation requires
-that the properties for a path be independent of all other (possibly intersecting) paths through the network.
-This is often not true: for instance the contents cached in a web proxy are affected by all end hosts whose
-requests are served by the proxy. Therefore to verify an invariant that say host A can never get content from
-server S we might need to verify not only the path between A and S (which goes through a web proxy W) but also
-the path from all other hosts which can reach W to server S. Path independence can be restored in a number of
-different ways in this case: a) placing a firewall between A and W configured to disallow requests from A to S
-(and thus prevent these requests from being served from the proxy), b) disallowing the proxy from caching any
-state from S or c) partitioning the cache so that A's cache is separate from other hosts (or more specifically
-hosts with different policies). 
+Limiting the model to only the few middleboxes in a path means that the complexity of the network model is a function of
+the longest path between a source destination pair, rather than the size of the network and makes verification tractable
+for almost all real world network. Unfortunately limiting the model to only the middleboxes in a path requires that
+their behavior be independent of packets sent along any other (possibly intersecting) path. We call this property path
+independence and find that it is not true in general. For instance the contents cached in a web proxy are affected by
+all end hosts who can reach the proxy. 
 
-Path independence obviously makes the problem of model checking networks more tractable but is also appealing
-from an administrative standpoint: since intersecting paths do not affect each other, network administrators
-must only consider the paths that actually pass through a middlebox when changing middlebox configuration.
-Similar when adding or removing middleboxes the only thing affected are paths on which the middleboxes appear.
-Determining the exact criterion for path independence, cases in which it makes sense and generalizing these
-results is the focus of my current research. Furthermore even if we cannot achieve complete path independence,
-even splitting the network into independent areas also reduces the state space and might be sufficient in many
-cases. 
+My research is currently focused on defining precise criterion for path independence, finding  methods to achieve path
+independence in networks and in analyzing the benefits of this property (outside of the benefits to model checking). For
+instance path independence would imply that most of the network is robust to changes (since middlebox failures or
+additions affect only those pairs of hosts whose traffic traverses the failed or added middlebox). 
+Furthermore even for networks where complete path independence is unachievable, other forms of independence (for
+instance of an area) might be sufficient to make this problem tractable.
 
-\section*{Extended Virtualization}
-Along with verifying networks which contain middleboxes and other complex network elements, other research I
-am involved in investigates how application writers and the users of networks can take advantage of these
-functions. 
+\section*{Service Level Virtualization}
+Finally I am also interested in primitives that can be provided by network operators to support the developers of
+networked applications. For instance many existing applications, for instance file hosting services like Dropbox, P2P
+applications and others build and use ad hoc notions of locality (i.e., some metric on network distance) to optimize
+file transfer times. Each of these applications invents new error-prone mechanisms to discover locality. The network
+operator is in a better position to provide this information (since they have access to the network topology) and can
+allow application developers to leverage this information to build richer and better applications.
 
-Existing application for instance file hosting services (such as Dropbox), P2P application (such as
-BitTorrent) and others rely on a notion of network distance, trying to minimize latency for network
-transfers. Similarly CDNs and other content delivery services often rely on DNS or other mechanisms to direct
-traffic to the nearest source for content, and VoIP providers might use servers to proxy traffic for clients
-behind NATs who are unable to directly accept connections. All of these applications can be better served by
-providing network primitives to accomplish these tasks: network providers know the topology of the network
-connecting their customers and are in a better position provide a distance metric for applications requiring
-low latency data transfer, they are often in a better position to direct traffic to caches and finally they
-can instantiate proxies which are closer to the source or destination for VoIP traffic thus decreasing
-latency.
+The idea that the network can provide additional information to improve application performance or decrease complexity
+has been proposed before (for instance by the ALTO project~\cite{seedorf2009traffic}). Previous proposals however
+suffered from two major drawbacks: 1) they were only applicable to certain applications and certain protocols, 2) they
+required that network administrators place new hardware within the network. We argue that the second limitation is now
+gone: as a result of NFV and processing requirement, large ISP networks have commodity server hardware deployed within
+their networks. Furthermore ISPs and network providers want to offer additional services as a means to gain new revenue
+streams and differentiate themselves from the competition.
 
-The idea that the network can provide additional information to improve application performance has been
-previous proposed (for instance by the ALTO project~\cite{seedorf2009traffic}). Previous proposals however
-suffered from two major drawbacks: 1) they were only applicable to certain applications and certain
-protocols, 2) they required that network administrators place new hardware within the network. We argue that
-the second limitation is now gone: as a result of NFV and processing requirement, large ISP networks have
-commodity server hardware deployed within the network. Furthermore ISPs and network providers want to offer
-additional services as a means to get new revenue and differentiate themselves from the competition.
-
-Our research in this area looks into a common set of reusable primitives that can be implemented (by network
-operators) and used by a wide range of application writers (referred to as tenants henceforth). By focusing
-on reusable primitives we make sure that we are not tied to particular services or protocols and in fact are
-usable in a wide range of settings. We call this extended virtualization since we envision that the network
-operator instantiates a virtual copy of these primitives for each tenant who makes use of these services.
+Our research asks what is a minimal set of reusable primitives that can be implemented (by network operators) and used
+by a wide range of applications (referred to as tenants henceforth). By focusing on reusable primitives we make sure
+that we are not tied to particular services or protocols and in fact are usable in a wide range of settings. We call
+this service level virtualization since we envision that the network operator can instantiate virtual copies of these
+services on behalf of tenants.
 
 The current set of primitives that we support include: i) local discovery: a DNS like service that provides a
 set of local (i.e. nearby) peers, ii) global discovery: a DNS like per application service that provides
@@ -182,34 +199,18 @@ demultiplexing: allows for the coexistence of different naming schemes (for inst
 schemes and DNS like names) and sends requests to different naming services based on the type of query, etc.
 and others.
 
-Application writers can logically compose these services to provide end user services. As an example consider
-an application like Dropbox. At present the Dropbox client is responsible for using DNS to discover the
-origin server on which data is stored, and uses flooding or other mechanisms to discover other clients connected to
-the same local area network. The client then uses this information to decide on the most efficient way to
-synchronize the file system (by sending data only to the origin server, by sending data to both the origin
-server and any local machines or using some other strategy). In a network supporting extended virtualization,
-Dropbox could instead ask the network provider to instantiate a local and global discovery service. In this
-new model Dropbox can rely on the global and local discovery services for the location of the origin server and
-all nearby (as defined by the local discovery service) peers belonging to the same user, and use this
-information to optimize file synchronization.
+Applications compose these services to provide desired functionality. As an example again consider a file hosting
+application like Dropbox. Instead of relying on an ad hoc mechanism to discover nearby clients (and optimize file
+transfers), Dropbox can instead use local discovery to find all local peers who have been authenticated by the same user
+and transfer data directly to them. It can also rapidly respond to service failures and increased demand by
+reconfiguring the global discovery service to move load to other servers. The use of these primitives thus not only simplifies
+Dropbox's client side application (which no longer needs to account for locality) but also simplifies failure recovery and load
+balancing at the backend.
 
-Discovering the minimal set of primitives is still an open question for this research, our current efforts
-have focused on building primitives to support a small set of representative applications. As the number of
-general purpose cores deployed in carrier networks increases a move towards using the network as a platform
-seems inevitable.
-
-The two research project described are synergistic since moving to a model where the network is a platform
-creates a scenario where new network functionality is rapidly configured and deployed in the network. As the
-pace at which new functionality is deployed increases the chance of bugs or configuration errors increases as
-does the complexity of manually verifying new networking functionality. Verification therefore is an important
-requirement for the network to evolve into a platform: network operators need tools to guarantee correctness
-even as they allow a wider set of tenants to affect the internals of a network.
-
-At the same time verification is interesting largely because of the pace at which networks are evolving and
-because of the complexity of some of the tools deployed. As network complexity increases it is inevitable that
-we will need formal verification techniques to prove correctness for these large distributed systems. 
-
-
+Overall my research focuses on building tools and techniques to respond to evolving network demands. It is essential
+that networks provide a wider set of more easily usable services (and enable new applications) but this cannot be at the
+cost of availability and correctness. At the same time a highly available but mostly stagnant network is not acceptable
+either. Therefore it is important to balance both these concerns and build tools that help with both.
 \bibliographystyle{abbrv}
 \bibliography{bibs}
 \end{document}
