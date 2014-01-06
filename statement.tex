@@ -27,40 +27,47 @@
 \date{}
 \thispagestyle{empty}
 \maketitle
-Originally networks were responsible for best-effort packet delivery between hosts. These networks
-were designed to be resilient (i.e., they were designed to recover from failures such as link and switch failures) but
-availability was not a requirement. This meant that in practice networks could take tens or hundreds of milliseconds (if
-not longer) to recover, while the control plane computed and converged on a new set of forwarding rules. During control
-plane convergence the network was also required to tolerate loops, blackholes and other misconfigurations. These
-conditions are no longer true for modern networks.
+Originally networks were designed to be extremely resilient (i.e., they were designed to recover from arbitrary sets of
+failures such as link and switch failures) but high availability was not a requirement. This meant that in practice
+networks could take tens or hundreds of milliseconds (if not longer) to recover, while the control plane computed  a new
+set of forwarding rules. This is no longer true for modern networks, which support many critical time-sensitive
+applications. Therefore, high availability is a key concern for modern network design.
 
-Modern networks are required to provide a broader set of functions. Some of these functions are provided by middleboxes and are
+In addition, networks were originally envisioned to provide best-effort packet delivery. This assumptions is als no
+longer true, and most networks provide a broader set of functions. Some of these functions are provided by middleboxes and are
 used by the network operator to improve network performance and reliability. For instance ISPs use a combination of web
 proxies (for caching static content), traffic shapers and WAN optimizers to increase perceived end user performance for
-networks. They also make use of a variety of stateful and application specific firewalls to provide isolation between
+networks. They also make use of a variety of stateful and application-specific firewalls to provide isolation between
 customers, restrict traffic according to legal requirements and to protect the network from denial of service or other
 attacks. The number and variety of deployed middleboxes~\cite{sherry2012making} has increased greatly over the past
-years as we have discovered both new opportunities for optimization and new threats against which networks must be
+years as we have discovered both new opportunities for functionality and new threats against which networks must be
 protected.
 
-Other networks functionality is required to support networked applications. DHCP and DNS were some of the early examples
-of such services, providing mechanisms for automatic configuration and discovery of services. Since then the list of
-such services has grown and networks provide services for content delivery, IPTV services, VoIP services etc. These
-services become more important as the complexity of networked applications increases and networks are now increasingly
-turning into platforms for implement networked applications.
+Another development is that carriers, which once merely provided network connectivity as their product, are now
+interested in providing a ``service platfor'' on which new services can be built. That is, carriers are are looking for
+ways to support the deployment of content delivery, IPTV services, VoIP services etc. 
 
-Secondly, customers (both end user and content providers) expect networks to be highly available: in particular
+\eat{Secondly, customers (both end user and content providers) expect networks to be highly available: in particular
 requiring little or no disruption during failures. Providing high availability means that networks can no longer wait
 for control plane convergence (at least not for tens or hundreds of milliseconds) to restore connectivity (i.e. ensure
 that there are paths from a source to a destination). Furthermore, any misconfiguration of middleboxes or switches can
 be catastrophic, requiring that customers wait not just for control plane convergence but for human intervention. Modern
 networks therefore need to protect against a wide variety of failure scenarios, including not just equipment failure but
-also misconfiguration.
+also misconfiguration.}
 
-My research attempts to address these issues in three ways: (1) reducing the time taken for networks to restore
-connectivity, (2) providing tools and techniques for verifying correctness of networks with dynamic data path elements
-(such as middleboxes) and (3) building primitives for service level virtualization that can be used by application
-developers.
+These three developments have inspired my recent research agenda. Specifically:
+\begin{itemize}
+    \item I have worked on routing techniques that move the responsibility for basic connectivity to the data plane,
+        allowing the network to recover on packet time scales and providing high availability. While the data plane
+        provides connectivity (which we argue requires only local information), route optimization continues to be the
+        control plane's responsibility.
+    \item High availability applies not just to packet delivery but rather to the whole range of functions provided by
+        networks (for instance isolation). I am currently developing tools to verify the correctness of networks with
+        dynamic path elements such as middleboxes. Previous verification techniques focus only on static data path
+        elements such as routers and switches.
+    \item Lastly, I have worked on primitives for service-level virtualization that can help carriers provide platforms
+        for deploying new network services.
+\end{itemize}
 
 \section*{Network Resilience}
 Traditionally in networking we make a distinction between the data plane and the control plane: the data plane forwards
