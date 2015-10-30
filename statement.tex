@@ -1,5 +1,6 @@
 \documentclass[letterpaper]{article} 
 \usepackage{fancyhdr, cite, hyperref, lastpage}
+\usepackage{siunitx}
 \pagestyle{fancy}
 \setlength{\oddsidemargin}{12pt}
 \setlength{\evensidemargin}{10pt}
@@ -41,7 +42,9 @@ networks. They also deploy a variety of stateful and application-specific firewa
 customers, restrict traffic according to legal requirements, and to protect the network from denial of service and other
 attacks. The number and variety of deployed middleboxes~\cite{sherry2012making} has increased greatly over the past
 years as operators have discovered both new opportunities for functionality and new threats against which networks must be
-protected.
+protected. Furthermore, there has been a recent trend in industry for moving middlebox functionality into software
+network functions (NFs). This allows network operators to consolidate several middleboxes into a single physical server
+running several NFs (with each NF isolated in a virtual machine), improves the rate at which new functionality can be deployed and simplifies management.
 
 A third recent development is that carriers, which once merely provided network connectivity as their product, are now
 interested in providing a ``service platform'' on which new services can be built. That is, carriers are are looking for
@@ -65,8 +68,17 @@ These three developments have inspired my recent research agenda. Specifically:
         networks (for instance isolation). I am currently developing tools to verify the correctness of networks with
         dynamic path elements such as middleboxes. Previous verification techniques focus only on static data path
         elements such as routers and switches.
-    \item Lastly, I have worked on primitives for service-level virtualization that can help carriers provide platforms
-        for deploying new network services.
+    \item I have worked on primitives for service-level virtualization that can help carriers provide platforms
+        for deploying new network services. 
+    \item Finally, I am now working on a framework, ZCSI, that leverages static and dynamic checks from programming languages
+    to provide software isolation for network functions. This would allow multiple NFs to run on a system, without
+    requiring each NF to run on a separate process, or VM. This both allows more fine-grained scheduling (since the OS
+    scheduler is no longer responsible for decisions on what packets are processed next), better performance and enable
+    denser NF deployments (since we avoid the overhead imposed by VMs). Furthermore, we are also exploring ways to allow
+    NFs to be written in high-level languages without negatively impacting packet processing performance. The use of
+    high-level languages can both improve developer productivity, and enable a wider set of developers to build NFs.
+    This might even allow the NF landscape to evolve so it is similar to today's cloud infrastructure, with third party
+    application developers deploying new, novel network functions.
 \end{itemize}
 
 \section*{Network Resilience}
@@ -125,7 +137,8 @@ Unfortunately middleboxes and other network elements violate all three of these 
 of learning switches, stateful firewalls, etc. depends not only on their configuration but also on past traffic, (2)
 application specific firewalls and other middleboxes often operate at layer 4 or layer 7 and their behavior depends on
 the packet payload and (3) middleboxes are commonly built using general purpose CPUs and do not have the semantic
-limitations of ASICs. Thus, these newly developed verification techniques (e.g., Veriflow and HSA) cannot be used. But such global analysis techniques are necessary because the overall behavior of the
+limitations of ASICs. Thus, these newly developed verification techniques (e.g., Veriflow and HSA) cannot be
+used~\cite{panda2015new}. But such global analysis techniques are necessary because the overall behavior of the
 network is a function not just of the configuration of an individual middlebox but depends on the configuration of all
 middleboxes traversed. For instance the presence of a WAN optimizer might affect the behavior of an application
 specific firewall, especially if the WAN optimizer appears before the firewall.
@@ -173,20 +186,17 @@ the longest path between a source destination pair, rather than the size of the 
 for almost all real world network. Unfortunately limiting the model to only the middleboxes in a path requires that
 their behavior be independent of packets sent along any other (possibly intersecting) path. We call this property ``path
 independence'' and find that it is not true in general. For instance the contents cached in a web proxy are affected by
-all end hosts who can reach the proxy. 
-
-I am currently looking at various definitions of path independence, finding  methods to achieve path
-independence in networks and in analyzing the benefits of this property (outside of the benefits to model checking). For
-instance path independence would imply that most of the network is robust to changes (since middlebox failures or
-additions affect only those pairs of hosts whose traffic traverses the failed or added middlebox). 
-Furthermore even for networks where complete path independence is unachievable, other forms of independence (for
-instance of an area) might be sufficient to make this problem tractable.
-
+all end hosts who can reach the proxy. However, even in these cases, it is often possible to find a smaller subset of
+the network to analyze: this is based on the observation that network topologies are largely symmetric and that 
+network policy is often expressed in terms of policy groups, each of which contains several end hosts. Based on these
+observations, one can often analyze a smaller network containing just one host from each policy group when verifying
+network reachability invariants. My current work looks at how to automatically find such a subnetwork for a given
+network and invariant.
 
 \end{itemize}
 
 \section*{Service Level Virtualization}
-Finally I am also interested in primitives that can be provided by network operators to support the developers of
+I am also interested in primitives that can be provided by network operators to support the developers of
 networked applications. Many existing applications, for instance file hosting services like Dropbox, P2P
 applications and others build and use ad hoc notions of locality (i.e., some metric on network distance) to optimize
 file transfer times. Each of these applications invents new error-prone mechanisms to discover locality. The network
@@ -231,6 +241,50 @@ We have used the flexibility offered by these primitives and the configuration m
 applications, including a file hosting application in a few 100 lines of C++ code. By contrast writing a similar
 applications in the current internet would require building mechanisms for discovering locality, building cache and
 storage servers, etc. and would therefore require orders of magnitude more code.  
+
+\section*{Framework for Building Network Function}
+The current NFV deployment model envisions that network operators deploy network functions (NFs) in virtual
+machines or containers, which are connected by virtual switches within the same machine. This deployment model ensures isolation
+between network functions running on the same physics server, guaranteeing correctness when mutually-untrusted NFs are place on
+the same physical machine. The use of VMs and containers however comes at a cost: transferring data and control between these involves
+going through the OS scheduler which can add $0.5 -- 1$\si{\micro\second} of latency per context switch and the use of virtual
+machines adds significant resource overheads. Furthermore, while the overhead is lower for containers, it is not 
+negligible.
+
+While these costs have not been an issue in other contexts, NFV workloads must forward packets at very high-rates (14
+million packets per second or higher) to be able to saturate modern network links. In this environment, cross-VM
+communication is common, and meeting latency requirements (which require that packets be processed within several
+\si{\micro\second}) requires frequent context switches. My current research proposes an alternate framework, ZCSI, which
+provides the same level of isolation and safety as the existing VM based solutions while eliminating many of the
+overheads associated with this isolation.
+
+Previous work on the Singularity~\cite{hunt2007singularity} operating system has shown that static and runtime checks 
+provided by managed languages like C\# and Java can be leveraged to provide the same level of isolation as provided by
+processes. ZCSI leverages this isolation mechanism and provides a framework where all NFs in a physical server run in
+a single address space, while retaining the isolation provided by container based techniques. This eliminates the
+context switch and resource overheads indicated above while still providing isolation. Furthermore, since cross-VM
+packet transfers are common in NFV platforms, we have developed novel static and runtime checks that allow us to provide
+safe zero-copy packet transfers within this framework.
+
+Moving to a framework such as ZCSI can provide benefits beyond just performance. ZCSI provides a convenient framework
+for exploring scheduling policies for NFs, and can be used to provide performance and resource isolation in addition to
+memory isolation. Additionally, NFs are currently written in C, and are heavily optimized to achieve high
+packets-per-second performance. This reliance on low-level optimization greatly increases the time for developing an NF,
+and also results in such code being fragile. Network functions in ZCIS are written using high-level languages, and make use of
+framework provided data structures and operations that are specifically tuned to meet the requirements of NFs, this
+both reduces the time taken to develop NFs, provides improved performance and eliminates many common classes of bugs.
+Finally, many existing NFs are supplied as compiled binaries, which are optimized (by developers and compilers) to
+specific hardware microarchitectures. These NFs cannot easily take advantage of new CPU features, and do not perform as
+well on other microarchitectures (e.g., across different generations of Intel processors). ZCSI's use of managed
+languages and framework supplied data structures allow us to optimize NF performance for specific processors: we rely on
+JITting to generate low level code that is optimized to the specific micro-architecture being used, thus greatly
+improving performance. Furthermore, JITing also allows NFs written using ZCSI to be portable, i.e., they can run on
+entirely different CPU architectures. 
+
+Currently we have an early prototype of ZCSI, my current work focuses on building a more full-featured framework, which
+can support a wide range of NFs. Once we have a basic framework, we will begin investigating abstractions that allow a
+wide range of NFs to be implemented efficiently on top of ZCSI, and then investigate questions around performance
+isolation, scheduling, etc.
 
 \section*{Summary}
 Overall my research focuses on building tools and techniques to respond to evolving network demands. It is essential
